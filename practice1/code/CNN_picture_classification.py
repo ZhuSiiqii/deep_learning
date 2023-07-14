@@ -5,8 +5,13 @@ import random
 import torch
 import numpy as np
 import pickle
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib import pyplot as plt
 from operator import itemgetter
+import gradio as gr
+import os
+import time
 
 
 def data_iter(batch_size, features, labels):
@@ -22,20 +27,22 @@ def data_iter(batch_size, features, labels):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()           # 32*32
-        self.conv1 = nn.Conv2d(3, 6, 5)       # 28*28
-        self.pool1 = nn.MaxPool2d(2, 2)       # 14*14
-        self.conv2 = nn.Conv2d(6, 15, 5)      # 10*10
-        self.pool2 = nn.MaxPool2d(2, 2)       # 5*5
+        self.conv1 = nn.Conv2d(3, 32, 5, padding='same')       # 32*32
+        self.pool1 = nn.MaxPool2d(2, 2)       # 16*16
+        self.conv2 = nn.Conv2d(32, 64, 5, padding='same')      # 16*16
+        self.pool2 = nn.MaxPool2d(2, 2)       # 8*8
+#        self.conv3 = nn.Conv2d(15, 30, 3)     # 5*5
 
-        self.fc1 = nn.Linear(15*5*5, 120)
+        self.fc1 = nn.Linear(64*8*8, 120)
         self.dp1 = nn.Dropout(0.2)
-        self.fc2 = nn.Linear(120, 256)
+        self.fc2 = nn.Linear(120, 84)
         self.dp2 = nn.Dropout(0.2)
-        self.fc3 = nn.Linear(256, 10)
+        self.fc3 = nn.Linear(84, 10)
 
     def forward(self, x):
         x = self.pool1(F.relu(self.conv1(x)))
         x = self.pool2(F.relu(self.conv2(x)))
+#        x = F.relu(self.conv3(x))
         x = x.view(x.size()[0], -1)  # 展平  x.size()[0]是batch size
         x = F.relu(self.fc1(x))
         x = self.dp1(x)
@@ -71,10 +78,10 @@ valid_data = unpickle("data_batch_5")
 valid_data = list(valid_data.get(b'data'))
 valid_label = unpickle("data_batch_5")
 valid_label = list(valid_label.get(b'labels'))
-test_data = unpickle("test_batch")
-test_data = list(test_data.get(b'data'))
-test_label = unpickle("test_batch")
-test_label = list(test_label.get(b'labels'))
+test_data1 = unpickle("test_batch")
+test_data1 = list(test_data1.get(b'data'))
+test_label1 = unpickle("test_batch")
+test_label1 = list(test_label1.get(b'labels'))
 
 train_data = []
 train_label = []
@@ -107,12 +114,13 @@ valid_label = torch.from_numpy(valid_label)
 valid_data = valid_data.type(torch.FloatTensor)
 valid_label = valid_label.type(torch.FloatTensor)
 
-test_data = np.array(test_data, dtype=float)
-test_data.shape = (10000, 3, 32, 32)
-test_data = test_data/255.0
-test_label = np.array(test_label, dtype=float)
-test_data = torch.from_numpy(test_data)
-test_label = torch.from_numpy(test_label)
+test_data1 = np.array(test_data1, dtype=float)
+test_data1.shape = (10000, 3, 32, 32)
+test_data2 = test_data1/255.0
+test_data3 = test_data2
+test_label1 = np.array(test_label1, dtype=float)
+test_data = torch.from_numpy(test_data2)
+test_label = torch.from_numpy(test_label1)
 test_data = test_data.type(torch.FloatTensor)
 test_label = test_label.type(torch.FloatTensor)
 
@@ -123,15 +131,16 @@ print(net)
 # 交叉熵损失函数
 criterion = nn.CrossEntropyLoss()
 # 定义优化器
-lr = 0.0001
-optimizer = optim.Adam(net.parameters(), lr=lr)
+lr = 0.001
+optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=0.01)
 
 
 epochs = 80
-batch_size = 32
+batch_size = 64
 train_loss_list, valid_loss_list, train_acc_list, valid_acc_list = [], [], [], []
+start_time = time.time()
 for epoch in range(epochs):
-    train_l_sum, train_acc_sum, n, num_correct = 0.0, 0.0, 0, 0.0
+    train_l_sum, train_acc_sum, n, cnt, num_correct = 0.0, 0.0, 0, 0, 0.0
 
     for i, data in enumerate(data_iter(batch_size, train_data, train_label), 0):  # i 第几个batch     data：一个batch中的数据
         # 输入数据
@@ -152,6 +161,7 @@ for epoch in range(epochs):
         prediction = torch.argmax(outputs, dim=1)
         num_correct += torch.sum(prediction == labels).item()
         n += labels.size(0)
+        cnt += 1
     # 验证集 验证
 
     valid_predict = net(valid_data)
@@ -162,14 +172,15 @@ for epoch in range(epochs):
     valid_num_correct = torch.sum(valid_prediction == valid_label).item()
     valid_n = valid_label.size(0)
 
-    train_loss_list.append(train_l_sum / n)
+    train_loss_list.append(train_l_sum / cnt)
     train_acc_list.append(num_correct / n)
-    valid_loss_list.append(valid_l_sum / valid_n)
+    valid_loss_list.append(valid_l_sum)
     valid_acc_list.append(valid_num_correct / valid_n)
-    print('epoch %d, train_loss %.10f, train_acc %.3f, valid_loss %.10f, valid_acc %.3f' % (epoch + 1, train_l_sum / n,
-          num_correct / n, valid_l_sum / valid_n, valid_num_correct / valid_n))
-
+    print('epoch %d, train_loss %.10f, train_acc %.3f, valid_loss %.10f, valid_acc %.3f' % (epoch + 1, train_l_sum / cnt,
+          num_correct / n, valid_l_sum , valid_num_correct / valid_n))
+tim = time.time() - start_time
 print('Finished Training')
+print('total time : %.3f' % tim)
 # 测试集 评估
 test_predict = net(test_data)
 test_label = test_label.long()
@@ -181,7 +192,7 @@ print('test_acc = %.3f' % (test_num_correct / test_n))
 plt.figure(1)
 x = np.linspace(0, epochs-1, epochs)
 plt.plot(x, train_loss_list, c='r', label="train_loss")
-
+plt.plot(x, valid_loss_list, c='b', label="valid_loss")
 plt.legend()
 plt.title("Train and Valid loss  lr={}".format(lr))
 plt.xlabel('epoch')
@@ -190,16 +201,6 @@ plt.show()
 
 plt.figure(2)
 x = np.linspace(0, epochs-1, epochs)
-plt.plot(x, valid_loss_list, c='b', label="valid_loss")
-plt.ylim(0, 0.0003)
-plt.legend()
-plt.title("Train and Valid loss  lr={}".format(lr))
-plt.xlabel('epoch')
-plt.ylabel('loss')
-plt.show()
-
-plt.figure(3)
-x = np.linspace(0, epochs-1, epochs)
 plt.plot(x, train_acc_list, c='r', label="train_acc")
 plt.plot(x, valid_acc_list, c='b', label="valid_acc")
 plt.legend()
@@ -207,3 +208,40 @@ plt.title("Train and Valid precision  lr={}".format(lr))
 plt.xlabel('epoch')
 plt.ylabel('accuracy')
 plt.show()
+
+
+def image_mod(str):
+    if str == 'train and valid_loss':
+        return 'image/1.png'
+    else:
+        return 'image/2.png'
+
+
+demo1 = gr.Interface(
+    image_mod,
+    gr.Dropdown(
+        ["train and valid_loss", "train and valid_acc"], label="Option", info="Please choose one figure to display!"
+    ),
+    'image',
+)
+
+
+def image_convert(m):
+    a = test_data3[int(m)]
+    a = a.transpose(1, 2, 0)
+    test_data1_tensor = torch.as_tensor(test_data3[int(m)], dtype=torch.float)
+    b = test_data1_tensor.unsqueeze(0)
+    test_predict_1 = net(b)
+    test_predict_1 = test_predict_1.squeeze(0)
+    m_predict = torch.argmax(test_predict_1, dim=-1)
+    return a, classes[int(test_label1[int(m)])], classes[int(m_predict)]
+
+
+demo2 = gr.Interface(
+    image_convert,
+    inputs=['number'],
+    outputs=['image', gr.Textbox(label="实际类别"), gr.Textbox(label="预测类别")],
+
+)
+demo = gr.TabbedInterface([demo1, demo2], ["LinePlot", "Test"])
+demo.launch()
