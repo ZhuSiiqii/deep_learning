@@ -26,7 +26,7 @@
 
 
 ## 三、实验步骤
-![image](E:/zsq_os_lab/图片1.png)
+![image](./图片1.png)
 
 ### 核心思路:
 
@@ -78,7 +78,7 @@ int old_in_point=0;
 * (4) 再次将in_point指针后移，由于采用的是循环数组，注意取模
 * (5) 最后V(mutex),V(full)
 
-* 具体地
+* 具体地:
 * (1)使用Windows头文件自带的Sleep函数来实现随机等待
 ```c
 Sleep(rand() % 1000*10);
@@ -186,7 +186,7 @@ void *producer(void *arg) {
 * (4) 再次将out_point指针后移，由于采用的是循环数组，注意取模
 * (5) 最后V(mutex),V(empty)
 
-* 具体地
+* 具体地:
 * (1)使用Windows头文件自带的Sleep函数来实现随机等待
 ```c
 Sleep(rand() % 1000*10);
